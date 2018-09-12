@@ -1,0 +1,410 @@
+clc
+clear
+% im = (imread('/Users/INNOCENTBOY/Documents/MATLAB/pic/4.2.04.tiff'));
+% % im = imresize(im,[1024,1024]);
+% im1 = double((im));
+tic
+imo = double(imread('256_p.jpg'));
+% imo = double(imread('/Users/INNOCENTBOY/Documents/MATLAB/pic/4.2.04.tiff'));
+
+im1(:,:,:) = imo(:,:,:);
+im = im1(:,:,3);
+
+% data = 'ABCDEFABCDEFABCD';
+% data = 'ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ';
+fid=fopen('textprojectfile2.txt','r');
+data=fread(fid);
+A = double(int16(data'));
+% A = mat_rev_diffussion4(A);
+
+[comp1, comp, prob1] = huff_enc(A);
+comp1 = mat_rev_diffussion4(comp1);
+
+siz_app= size(imo);
+siz_app = siz_app(1)*siz_app(2)*siz_app(3);
+siz_app = (siz_app/4)*5;
+if(numel(comp1)>=(siz_app))
+    siz_enc = comp1(1:siz_app);
+    siz_con = comp1(siz_app+1:end);
+    comp1 = size(siz_enc);
+    comp1 = siz_enc;
+else
+    siz_con=[];
+end
+
+% comp1 = mat_rev_diffussion4(comp1);
+xsini(1,1)=0.1;
+for i = 2:1:(numel(comp1))+2
+    xsini(1,i) = mod(sin(pi * xsini(1,i-1)),1);
+end
+xsin = 1+floor(mod(xsini(3:end)*10^10,numel(comp1)));
+comp1 = confusion_impl2(comp1,xsin,1);
+
+
+comp1= comp1';
+comp2 = zeros(1,64);
+
+ev = 39;
+if(numel(comp1)<39)
+    ev =  numel(comp1);
+end
+
+
+comp2(2:ev+2-1) = comp1(1:ev);
+add_val = de2bi(numel(comp1),24,'left-msb');
+comp2(41:64) = add_val(:,:);
+mat1 = comp1(40:end);
+rem = mod(numel(mat1),63);
+mat2 = mat1(end-rem+1:end);
+mat3 = mat1(1:(numel(mat1)-rem));
+msg_block = numel(mat3)/63;
+if(numel(mat2)~=0)
+    msg = zeros(msg_block+2,64);
+else
+    msg = zeros(msg_block+1,64);
+end
+msg(1,1:64) = comp2(:,:);
+
+for i = 0:1:msg_block-1
+    val1 = mat3((i*63)+1:(i*63)+63);
+    msg(i+2,2:64) = val1(:,:);
+end
+if(numel(mat2)~=0)
+    add_val = [0,mat2, zeros(1,64-numel(mat2)-1)];
+    msg(msg_block+2,1:64) = add_val(:,:);
+end
+msg = msg';
+comp2 = msg(:)';
+val = conf_n(comp2);
+
+[LL,LH,HL,HH] = dwt2(im,'haar');
+co = (LL(:,:));
+co1 = (HH(:,:));
+co2 = (LH(:,:));
+co3 = (HL(:,:));
+p=8;
+[r,c] = size(LL);
+count = 0;
+[m1,n1,z1] = size(val);
+mode_val = numel(LL)/64;
+rat = 1;
+count2=0;
+plane =1;
+dim=3;
+co_o= (im1(:,:,:));
+% co_o= (zeros(size(im)));
+li =1;
+while(plane<=7)
+    while(dim>=1)
+        if(plane ==1)
+            %HH
+            for ii = 1:p:r-p+1
+                for jj = 1:p:c-p+1
+                    val_v = (count2+1);
+                    matrix_gen = HH(ii:ii+p-1,jj:jj+p-1);
+                    [co1(ii:ii+p-1,jj:jj+p-1)] = enc_edgy(matrix_gen,val(:,:,val_v));
+                    count2=count2+1;
+                    count = count+1;
+                    if(count>=z1)
+                        break;
+                    end
+                    
+                end
+                if(count>=z1)
+                    break;
+                end
+            end
+            for ii = 1:p:r-p+1
+                for jj = 1:p:c-p+1
+                    %LH
+                    if(count>=z1)
+                        break;
+                    end
+                    val_v = (count2+1);
+                    matrix_gen = LH(ii:ii+p-1,jj:jj+p-1);
+                    [co2(ii:ii+p-1,jj:jj+p-1)] = enc_edgy(matrix_gen,val(:,:,val_v));
+                    count2=count2+1;
+                    count = count+1;
+                    if(count>=z1)
+                        break;
+                    end
+                    
+                    %HL
+                    val_v = (count2+1);
+                    matrix_gen = HL(ii:ii+p-1,jj:jj+p-1);
+                    [co3(ii:ii+p-1,jj:jj+p-1)] = enc_edgy(matrix_gen,val(:,:,val_v));
+                    count2=count2+1;
+                    count = count+1;
+                    if(count>=z1)
+                        break;
+                    end
+                end
+                if(count>=z1)
+                    break;
+                end
+            end
+        end
+        for i = 1:p:r-p+1
+            for j = 1:p:c-p+1
+                if(count>=z1)
+                    break;
+                end
+                val_v = (count2+1);
+                matrix_gen = LL(i:i+p-1,j:j+p-1);
+                [co(i:i+p-1,j:j+p-1),rat] = complexity_all(matrix_gen,val(:,:,val_v),plane);
+                
+                count = count+1;
+                if(rat==-1)
+                    count =count-1;
+                else
+                    count2=count2+1;
+                end
+                if(count>=z1)
+                    break;
+                end
+            end
+            if(count>=z1)
+                break;
+            end
+        end
+        co_1 = idwt2(co,co2,co3,co1,'haar');
+        co_o(:,:,dim) =co_1(:,:);
+        if(count>=z1)
+            break;
+        end
+        dim=dim-1;
+        if(dim>=1)
+            im(:,:) = im1(:,:,dim);
+            [LL,LH,HL,HH] = dwt2(im,'haar');
+            co = (LL(:,:));
+            co1 = (HH(:,:));
+            co2 = (LH(:,:));
+            co3 = (HL(:,:));
+            
+        end
+    end
+    dim =3;
+    if(count>=z1)
+        break;
+    end
+    plane = plane+1;
+    im1(:,:,:) = co_o(:,:,:);
+    im = im1(:,:,dim);
+    [LL,LH,HL,HH] = dwt2(im,'haar');
+    co = (LL(:,:));
+    co1 = (HH(:,:));
+    co2 = (LH(:,:));
+    co3 = (HL(:,:));
+end
+toc
+im_10(:,:,:) = co_o(:,:,:);
+% [im_10] = idwt2(co,LH,HL,HH,'haar');
+
+
+%% Inv
+
+%Length Cal
+% [LL,LH,HL,HH] = dwt2(im_10,'haar');
+co = zeros(8,8);
+p=8;
+im_1_1 = im_10(:,:,3);
+[LL,LH,HL,HH] = dwt2(im_1_1,'haar');
+[r,c] = size(LL);
+count = 0;
+mode =1;
+rat =1;
+for i = 1:p:r-p+1
+    for j = 1:p:c-p+1
+        
+        matrix_gen = HH(i:i+p-1,j:j+p-1);
+        [co(:,:)] = enc_edgy_rev(matrix_gen);
+        count = count+1;
+        %         if(rat==-1)
+        %             count = count-1;
+        %         end
+        if(count>=1)
+            break;
+        end
+    end
+    if(count>=1)
+        break;
+    end
+end
+co = co(:)';
+length_orignal = co(end-23:end);
+length_orignal = bi2de(length_orignal,'left-msb');
+totalval = 64;
+mat1 = length_orignal-39;
+if(mat1>=1)
+    rem = mod(mat1,63);
+    mat2 = rem;
+    mat3 = mat1-mat2;
+    msg_block = (mat3)/63;
+    msg_length = (msg_block+2)*64;
+    no_block = (msg_length)/64;
+    val_ex = zeros(8,8,no_block);
+else
+    val_ex = zeros(8,8,1);
+    
+end
+
+%% INFO EXTRACT
+% [LL,LH,HL,HH] = dwt2(im_10,'haar');
+co = zeros(8,8);
+p=8;
+[r,c] = size(LL);
+count = 0;
+[m1,n1,z1] = size(val_ex);
+mode = 1;
+l=1;
+count2=0;
+dim =3;
+plane=1;
+while(plane <=7)
+    while(dim>=1)
+        
+        if(plane ==1)
+            %HH
+            for ii = 1:p:r-p+1
+                for jj = 1:p:c-p+1
+                    matrix_gen = HH(ii:ii+p-1,jj:jj+p-1);
+                    [co(:,:)] = enc_edgy_rev(matrix_gen);
+                    val_ex(:,:,count2+1) = co(:,:);
+                    count2=count2+1;
+                    count = count+1;
+                    if(count>=z1)
+                        break;
+                    end
+                end
+                if(count>=z1)
+                    break;
+                end
+            end
+            for ii = 1:p:r-p+1
+                for jj = 1:p:c-p+1
+                    if(count>=z1)
+                        break;
+                    end
+                    %LH
+                    val_v = (count2+1);
+                    matrix_gen = LH(ii:ii+p-1,jj:jj+p-1);
+                    [co(:,:)] = enc_edgy_rev(matrix_gen);
+                    val_ex(:,:,count2+1) = co(:,:);
+                    count2=count2+1;
+                    count = count+1;
+                    if(count>=z1)
+                        break;
+                    end
+                    
+                    %HL
+                    val_v = (count2+1);
+                    matrix_gen = HL(ii:ii+p-1,jj:jj+p-1);
+                    [co(:,:)] = enc_edgy_rev(matrix_gen);
+                    val_ex(:,:,count2+1) = co(:,:);
+                    count2=count2+1;
+                    count = count+1;
+                    if(count>=z1)
+                        break;
+                    end
+                end
+                if(count>=z1)
+                    break;
+                end
+            end
+        end
+        
+        for i = 1:p:r-p+1
+            for j = 1:p:c-p+1
+                if(count>=z1)
+                    break;
+                end
+                matrix_gen = LL(i:i+p-1,j:j+p-1);
+                [co(:,:),rat] = complexity_all_ex(matrix_gen,plane);
+                l=l+1;
+                count=count+1;
+                if(rat==1)
+                    val_ex(:,:,count2+1) = co(:,:);
+                    count2=count2+1;
+                else
+                    count=count-1;
+                end
+                if(count>=z1)
+                    break;
+                end
+            end
+            if(count>=z1)
+                break;
+            end
+        end
+        if(count>=z1)
+            break;
+        end
+        dim=dim-1;
+        if(dim>=1)
+            im_1_1(:,:) = im_10(:,:,dim);
+            [LL,LH,HL,HH] = dwt2(im_1_1,'haar');
+        end
+    end
+    dim=3;
+    if(count>=z1)
+        break;
+    end
+    plane = plane+1;
+    im_1_1(:,:) = im_10(:,:,dim);
+    [LL,LH,HL,HH] = dwt2(im_1_1,'haar');
+end
+mat = conf_n_rev(val_ex)';
+mat = reshape(mat,[64,numel(mat)/64]);
+mat = mat';
+if(length_orignal<39)
+    v1 = mat(1,2:length_orignal+1);
+else
+    v1 = mat(1,2:40);
+    
+end
+v2 = [];
+for i = 1:1:(numel(mat)/64)-2
+    v2 = [v2, mat(i+1,2:64)];
+end
+if(numel(mat)>64)
+    el = mat(numel(mat)/64,2:64);
+    ze = mod(length_orignal+24,63);
+    v3 = el(1,1:ze);
+else
+    v3=[];
+end
+ou = [v1,v2,v3];
+
+xsini(1,1)=0.1;
+for i = 2:1:(numel(ou))+2
+    xsini(1,i) = mod(sin(pi * xsini(1,i-1)),1);
+end
+xsin = 1+floor(mod(xsini(3:end)*10^10,numel(ou)));
+ou = confusion_impl_rev2(ou,1,xsin);
+
+% ou = mat_diffussion4(ou);
+
+ou = [ou,siz_con'];
+ou = mat_diffussion4(ou);
+
+ou = huffmandeco(ou,comp);
+dhsig=(ou);
+% dhsig = mat_diffussion4(dhsig);
+
+dhsig = char(dhsig);
+fid=fopen('TEXT_128_11kb.txt','w');
+fwrite(fid,dhsig);
+
+% clearvars -except imo im_10 data siz_con comp1 plane
+
+psnr = PSNR_CAL(double(imo),double(im_10));
+
+[psnr1 mse1]=PSNRCal(imo,im_10)
+figure()
+subplot(2,1,1),imshow(uint8(imo));
+subplot(2,1,2),imshow(uint8(im_10));
+
+[qs, qm, qmaps] = imageQualityIndex (imo, im_10);
+qs
+qm
+[rmn,rpq] =corelation (imo, im_10)
